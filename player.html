@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>XP Board Music Player</title>
+<style>
+  html,body{margin:0;padding:0;height:100%;background:#1a1a2e;overflow:hidden}
+  #wrap{width:100%;height:100%}
+  iframe{width:100%;height:100%;border:none;display:block}
+  #msg{color:#fff;font-family:sans-serif;text-align:center;padding:40px 20px;font-size:14px}
+</style>
+</head>
+<body>
+<div id="wrap"></div>
+<script>
+  // Reads ?v=VIDEO_ID from the URL and embeds that YouTube video.
+  // Usage: player.html?v=dQw4w9WgXcQ
+  const params = new URLSearchParams(window.location.search);
+  const id = params.get('v');
+  const wrap = document.getElementById('wrap');
+
+  // Basic validation: YouTube IDs are 11 chars, letters/numbers/-/_
+  if (id && /^[a-zA-Z0-9_-]{11}$/.test(id)) {
+    const iframe = document.createElement('iframe');
+    iframe.src = 'https://www.youtube.com/embed/' + id + '?autoplay=1';
+    iframe.allow = 'autoplay; encrypted-media';
+    iframe.allowFullscreen = true;
+    wrap.appendChild(iframe);
+  } else {
+    wrap.innerHTML = '<div id="msg">No video specified.<br>Use <code>?v=VIDEO_ID</code> in the URL.</div>';
+  }
+</script>
+</body>
+</html>
