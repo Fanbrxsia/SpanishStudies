@@ -16,18 +16,25 @@
 <script>
   // Reads ?v=VIDEO_ID from the URL and embeds that YouTube video.
   // Usage: player.html?v=dQw4w9WgXcQ
-  // Supports remote control via postMessage from the parent page:
-  //   parent sends {cmd:'play'}, {cmd:'pause'}, {cmd:'toggle'}, {cmd:'seek', value:0-1}, {cmd:'loop'}
-  // and reports state back via postMessage:
+  //
+  // The player instance persists across track changes - to switch tracks,
+  // the parent should postMessage {cmd:'loadVideo', id:'NEW_VIDEO_ID'} rather
+  // than reloading this iframe's src (reloading breaks the IFrame API handshake
+  // on repeated loads in some browsers).
+  //
+  // Remote control via postMessage from the parent page:
+  //   {cmd:'play'}, {cmd:'pause'}, {cmd:'toggle'}, {cmd:'seek', value:0-1},
+  //   {cmd:'loop'}, {cmd:'loadVideo', id:'VIDEO_ID'}
+  // State reports back via postMessage:
   //   {type:'xpb-player', state:'playing'|'paused'|'ended'|'tick', duration, currentTime, title}
 
   const params = new URLSearchParams(window.location.search);
-  const id = params.get('v');
+  const initialId = params.get('v');
   const wrap = document.getElementById('wrap');
   let player = null;
   let reportTimer = null;
 
-  if (!id || !/^[a-zA-Z0-9_-]{11}$/.test(id)) {
+  if (!initialId || !/^[a-zA-Z0-9_-]{11}$/.test(initialId)) {
     wrap.innerHTML = '<div id="msg">No video specified.<br>Use <code>?v=VIDEO_ID</code> in the URL.</div>';
   } else {
     const target = document.createElement('div');
@@ -36,7 +43,7 @@
 
     window.onYouTubeIframeAPIReady = function() {
       player = new YT.Player('yt-target', {
-        videoId: id,
+        videoId: initialId,
         playerVars: { autoplay: 1, playsinline: 1 },
         events: {
           onReady: onPlayerReady,
@@ -94,6 +101,11 @@
         case 'loop':
           player.seekTo(0, true);
           player.playVideo();
+          break;
+        case 'loadVideo':
+          if (e.data.id && /^[a-zA-Z0-9_-]{11}$/.test(e.data.id)) {
+            player.loadVideoById(e.data.id);
+          }
           break;
       }
     });
