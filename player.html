@@ -12,22 +12,91 @@
 </head>
 <body>
 <div id="wrap"></div>
+<script src="https://www.youtube.com/iframe_api"></script>
 <script>
   // Reads ?v=VIDEO_ID from the URL and embeds that YouTube video.
   // Usage: player.html?v=dQw4w9WgXcQ
+  // Supports remote control via postMessage from the parent page:
+  //   parent sends {cmd:'play'}, {cmd:'pause'}, {cmd:'toggle'}, {cmd:'seek', value:0-1}, {cmd:'loop'}
+  // and reports state back via postMessage:
+  //   {type:'xpb-player', state:'playing'|'paused'|'ended'|'tick', duration, currentTime, title}
+
   const params = new URLSearchParams(window.location.search);
   const id = params.get('v');
   const wrap = document.getElementById('wrap');
+  let player = null;
+  let reportTimer = null;
 
-  // Basic validation: YouTube IDs are 11 chars, letters/numbers/-/_
-  if (id && /^[a-zA-Z0-9_-]{11}$/.test(id)) {
-    const iframe = document.createElement('iframe');
-    iframe.src = 'https://www.youtube.com/embed/' + id + '?autoplay=1';
-    iframe.allow = 'autoplay; encrypted-media';
-    iframe.allowFullscreen = true;
-    wrap.appendChild(iframe);
-  } else {
+  if (!id || !/^[a-zA-Z0-9_-]{11}$/.test(id)) {
     wrap.innerHTML = '<div id="msg">No video specified.<br>Use <code>?v=VIDEO_ID</code> in the URL.</div>';
+  } else {
+    const target = document.createElement('div');
+    target.id = 'yt-target';
+    wrap.appendChild(target);
+
+    window.onYouTubeIframeAPIReady = function() {
+      player = new YT.Player('yt-target', {
+        videoId: id,
+        playerVars: { autoplay: 1, playsinline: 1 },
+        events: {
+          onReady: onPlayerReady,
+          onStateChange: onPlayerStateChange
+        }
+      });
+    };
+
+    function onPlayerReady(event) {
+      event.target.playVideo();
+      startReporting();
+    }
+
+    function onPlayerStateChange(event) {
+      let state = 'unknown';
+      if (event.data === YT.PlayerState.PLAYING) state = 'playing';
+      else if (event.data === YT.PlayerState.PAUSED) state = 'paused';
+      else if (event.data === YT.PlayerState.ENDED) state = 'ended';
+      reportState(state);
+    }
+
+    function reportState(state) {
+      if (!player || typeof player.getCurrentTime !== 'function') return;
+      try {
+        window.parent.postMessage({
+          type: 'xpb-player',
+          state: state,
+          duration: player.getDuration(),
+          currentTime: player.getCurrentTime(),
+          title: (typeof player.getVideoData === 'function') ? player.getVideoData().title : ''
+        }, '*');
+      } catch (e) {}
+    }
+
+    function startReporting() {
+      clearInterval(reportTimer);
+      reportTimer = setInterval(() => reportState('tick'), 1000);
+    }
+
+    window.addEventListener('message', function(e) {
+      if (!player || !e.data || !e.data.cmd) return;
+      switch (e.data.cmd) {
+        case 'play': player.playVideo(); break;
+        case 'pause': player.pauseVideo(); break;
+        case 'toggle':
+          const s = player.getPlayerState();
+          if (s === YT.PlayerState.PLAYING) player.pauseVideo();
+          else player.playVideo();
+          break;
+        case 'seek':
+          if (typeof e.data.value === 'number') {
+            player.seekTo(player.getDuration() * e.data.value, true);
+          }
+          break;
+        case 'loop':
+          player.seekTo(0, true);
+          player.playVideo();
+          break;
+      }
+    });
   }
 </script>
 </body>
